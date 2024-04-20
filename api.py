@@ -5,12 +5,13 @@ client = OpenAI(api_key='sk-proj-p3EEROJCdAMdgcapJ0ZaT3BlbkFJL2PCjLlsCVGlvdvZ0b9
 completion = client.chat.completions.create(
   model="gpt-3.5-turbo",
   messages=[
-    {"role": "system", "content": "You are a poetic assistant, skilled in explaining complex programming concepts with creative flair."},
-    {"role": "user", "content": "Compose a poem that explains the concept of recursion in programming."}
+    {"role": "system", "content": "You are an expert lawyer, especially in the manners of US immigration. You will provide legal advice for users"},
+    {"role": "user", "content": "I am struggling with filling in my student application and I don't know where to start"}
   ]
 )
 
 print(completion.choices[0].message)
+pass
 
 
 # defaults to getting the key using os.environ.get("OPENAI_API_KEY")
