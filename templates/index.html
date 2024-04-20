@@ -61,11 +61,17 @@
             })
             .then(response => response.text())
             .then(text => {
-                document.getElementById('chat-container').innerHTML += '<p><strong>User:</strong> ' + prompt + '</p>';
-                document.getElementById('chat-container').innerHTML += '<p><strong>Chatbot:</strong> ' + text + '</p>';
+                const chatContainer = document.getElementById('chat-container');
+                chatContainer.innerHTML += '<p><strong>User:</strong> ' + prompt + '</p>';
+                chatContainer.innerHTML += '<p><strong>Chatbot:</strong> ' + text + '</p>';
                 document.getElementById('prompt-input').value = ''; // Clear input field
             });
         }
+
+        // Add the initial message when the page loads
+        window.onload = function() {
+            document.getElementById('chat-container').innerHTML = '<p><strong>Chatbot:</strong> Hello! I am an expert Lawyer specializing in immigration. Which immigration form are you looking to fill out today?</p>';
+        };
     </script>
 </body>
 </html>
