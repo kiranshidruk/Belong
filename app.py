@@ -1,6 +1,11 @@
-from flask import Flask, request, render_template, session
+from flask import Flask, request, render_template, session, send_file, jsonify
 from flask_session import Session
+from werkzeug.utils import secure_filename
 from openai import OpenAI
+from pydub import AudioSegment
+from pathlib import Path
+import os
+import time
 
 client = OpenAI(api_key='sk-proj-p3EEROJCdAMdgcapJ0ZaT3BlbkFJL2PCjLlsCVGlvdvZ0b9z')
 
@@ -43,8 +48,8 @@ Present Nationality (Citizenship)
 Nationality at Birth
 Race, Ethnic, or Tribal Group
 Religion
-Once all necessary information is collected, You will be ready to write the first page of the user's application, and you will communicate that with the user. 
-You will rewrite each of those fields but filled in with the user information:
+Once all necessary information is collected, You will be ready to write the first page of the user's application, and you will communicate that with the user. RESPOND IN THE LANGUAGE THE USER IS SPEAKING THEN finally you will 
+You will rewrite each of those fields but filled in with the user information (IN ENGLISH):
 Alien Registration Number(s) (A-Number) (if any) <user-parsed information>
 U.S. Social Security Number (if any) <user-parsed information>
 USCIS Online Account Number (if any) <user-parsed information>
@@ -67,6 +72,7 @@ Present Nationality (Citizenship) <user-parsed information>
 Nationality at Birth <user-parsed information>
 Race, Ethnic, or Tribal Group <user-parsed information>
 Religion <user-parsed information>
+
 """
 
 
@@ -75,7 +81,7 @@ def home():
     session.clear()  # Clear any existing session
     # Set an initial system prompt for greeting
     session['history'] = [
-        {"role": "system", "content": "The user is accessing the immigration form assistance service. Begin with a greeting and ask which form they need help with."}
+        {"role": "system", "content": system_prompt}
     ]
     return render_template("index.html")
 
@@ -84,10 +90,8 @@ def chat():
     user_prompt = request.form['prompt'].strip()
     session['history'].append({"role": "user", "content": user_prompt})
 
-    # Decide what system prompt to add based on user input
     determine_next_prompt(user_prompt)
 
-    # Generate response using OpenAI
     completion = client.chat.completions.create(
         model="gpt-3.5-turbo",
         messages=session['history']
@@ -96,7 +100,28 @@ def chat():
     bot_response = completion.choices[0].message.content
     session['history'].append({"role": "assistant", "content": bot_response})
 
-    return bot_response
+    # Convert the bot's response to speech
+    speech_file_path = generate_speech(bot_response)
+
+    return jsonify({
+        'text': bot_response,
+        'audio_url': '/audio/' + speech_file_path.name  # assuming the audio is accessible via a static path
+    })
+
+def generate_speech(text):
+    timestamp = int(time.time())  # Get current time in seconds since epoch
+    speech_file_path = Path(__file__).parent / f"speech_{timestamp}.mp3"
+    response = client.audio.speech.create(
+        model="tts-1",
+        voice="alloy",
+        input=text
+    )
+    response.stream_to_file(speech_file_path)
+    return speech_file_path
+
+@app.route('/audio/<filename>')
+def download_file(filename):
+    return send_file(Path(__file__).parent / filename, as_attachment=True)
 
 def determine_next_prompt(user_input):
     # Logic to add system prompts based on user input
@@ -110,6 +135,39 @@ def determine_next_prompt(user_input):
 
 def add_system_prompt(prompt):
     session['history'].append({"role": "system", "content": prompt})
+
+@app.route('/transcribe', methods=['POST'])
+def transcribe_audio():
+    # Define the directory for saving audio files
+    upload_dir = os.path.join(os.path.dirname(__file__), 'uploads')
+    # Create the directory if it does not exist
+    os.makedirs(upload_dir, exist_ok=True)
+
+    if 'audio' in request.files:
+        audio_file = request.files['audio']
+        filename = secure_filename(audio_file.filename)  # Should now have .mp3 due to JS change
+        save_path = os.path.join(upload_dir, filename)
+        audio_file.save(save_path)
+
+        # Convert webm to wav
+        sound = AudioSegment.from_file(save_path, format="webm")
+        wav_path = save_path.replace(".webm", ".wav")
+        sound.export(wav_path, format="wav")
+
+        # Now send the .wav file for transcription
+        with open(wav_path, "rb") as file:
+            transcription = client.audio.transcriptions.create(
+                model="whisper-1",
+                file=file
+            )
+
+        # Clean up files
+       # os.remove(save_path)  # Clean up original file
+        #os.remove(wav_path)   # Clean up converted file
+        print(transcription.text)
+        return {'transcription': transcription.text}
+
+    return {'error': 'No audio file provided'}, 400
 
 if __name__ == '__main__':
     app.run(debug=True)

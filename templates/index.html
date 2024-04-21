@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chatbot</title>
+    <title>Belong</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -13,7 +14,7 @@
         #prompt-input {
             width: 300px;
             padding: 10px;
-            margin-bottom: 10px;
+            margin-top: 10px;
         }
         #chat-container {
             background-color: white;
@@ -22,34 +23,92 @@
             margin-top: 20px;
         }
         button {
-            padding: 10px 20px;
+            padding: 10px;
             background-color: #007BFF;
             color: white;
             border: none;
             border-radius: 5px;
             cursor: pointer;
         }
-        button:hover {
+        button:hover, .recording {
             background-color: #0056b3;
         }
-    </style>
+        .chat-message {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .chat-message img {
+            border-radius: 50%;
+            width: 30px;
+            margin-right: 10px;
+        }
+        .chat-message p {
+            margin: 0;
+        }
+        .send-button{
+            background-color: #007BFF;
+            color: white;
+            transition: 0.5s ease-in-out;
+        }
+        .send-button:hover{
+            background-color: #0056b3;
+        }
+    </style>  
 </head>
 <body>
-    <h1>Chatbot</h1>
-    <input type="text" id="prompt-input" placeholder="Enter your prompt..." aria-label="Enter your prompt">
-    <form action="/select_form" method="post">
-        <label for="formType">Choose a form:</label>
-        <select name="formType" id="formType">
-            <option value="I-589">Form I-589</option>
-            <!-- Add other form options here -->
-        </select>
-        <input type="submit" value="Submit">
-    </form>
-    
-    <button onclick="sendPrompt()">Send</button>
     <div id="chat-container"></div>
-
+    <input type="text" id="prompt-input" placeholder="Enter your prompt..." aria-label="Enter your prompt">
+    <button id="recordButton" class="fa fa-microphone" onclick="toggleRecording()"></button>
+    <button onclick="sendPrompt()" class="send-button">Send</button>
     <script>
+        let mediaRecorder;
+        let audioChunks = [];
+        let isRecording = false;
+        const audio = new Audio(); // Create a single Audio instance
+        const recordBtn = document.getElementById('recordButton');
+    
+        function toggleRecording() {
+            if (!isRecording) {
+                navigator.mediaDevices.getUserMedia({ audio: true })
+                    .then(stream => {
+                        mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm; codecs=opus' });
+                        mediaRecorder.start();
+                        audioChunks = [];
+                        mediaRecorder.addEventListener("dataavailable", event => {
+                            audioChunks.push(event.data);
+                        });
+                        mediaRecorder.addEventListener("stop", () => {
+                            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                            sendAudioToServer(audioBlob);
+                        });
+                        isRecording = true;
+                        recordBtn.classList.add('recording');
+                    });
+            } else {
+                mediaRecorder.stop();
+                isRecording = false;
+                recordBtn.classList.remove('recording');
+            }
+        }
+    
+        function sendAudioToServer(audioBlob) {
+            const formData = new FormData();
+            formData.append("audio", audioBlob, "blob.mp3");
+            fetch('/transcribe', {
+                method: 'POST',
+                body: formData,
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log("Transcription: ", data.transcription);
+                if (data.transcription) {
+                    document.getElementById('prompt-input').value = data.transcription;
+                }
+            })
+            .catch(error => console.error('Error:', error));
+        }
+    
         function sendPrompt() {
             const prompt = document.getElementById('prompt-input').value;
             fetch('/chat', {
@@ -59,19 +118,27 @@
                 },
                 body: 'prompt=' + encodeURIComponent(prompt)
             })
-            .then(response => response.text())
-            .then(text => {
+            .then(response => response.json())
+            .then(data => {
                 const chatContainer = document.getElementById('chat-container');
-                chatContainer.innerHTML += '<p><strong>User:</strong> ' + prompt + '</p>';
-                chatContainer.innerHTML += '<p><strong>Chatbot:</strong> ' + text + '</p>';
-                document.getElementById('prompt-input').value = ''; // Clear input field
-            });
-        }
+                chatContainer.innerHTML += '<div class="chat-message"><img src ="https://i.ibb.co/ccx8kpH/capsncrunch-a-determined-squirrel-mascot-character-wearing-a-ba-6ffada0a-aeca-447d-bf98-e715b0e07413.png"> <p><strong>User:</strong> ' + prompt + '</p></div>'
+                chatContainer.innerHTML += `<div class="chat-message"><img src="https://i.ibb.co/FqtB3xm/7e9b9767-3056-49d9-aa0e-392962e45a13.webp" alt="Chatbot"><p><strong>Belong:</strong> ${data.text}</p></div>`; // Display the text response with the chatbot's profile photo
+                const newAudioUrl = data.audio_url + '?t=' + new Date().getTime(); // Add timestamp to the audio URL //h
+                //https://i.ibb.co/TctSWWn/chatbot-profile.png
 
-        // Add the initial message when the page loads
+                //https://i.ibb.co/ccx8kpH/capsncrunch-a-determined-squirrel-mascot-character-wearing-a-ba-6ffada0a-aeca-447d-bf98-e715b0e07413.png
+                audio.src = newAudioUrl;
+                audio.load();
+                audio.play();
+                document.getElementById('prompt-input').value = ''; // Clear input field
+            })
+            .catch(error => console.error('Error:', error));
+        }
+    
         window.onload = function() {
-            document.getElementById('chat-container').innerHTML = '<p><strong>Chatbot:</strong> Hello! I am an expert Lawyer specializing in immigration. Which immigration form are you looking to fill out today?</p>';
+            document.getElementById('chat-container').innerHTML = `<div class="chat-message"><img src="https://i.ibb.co/TctSWWn/chatbot-profile.png" alt="Chatbot"><p><strong>Belong:</strong> Hello! I am an expert Lawyer specializing in immigration. Which immigration form are you looking to fill out today?</p></div>`;
         };
     </script>
+    
 </body>
 </html>
